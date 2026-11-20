@@ -1,0 +1,76 @@
+name: Build Reeve IPA
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Install Metal toolchain
+        run: xcodebuild -downloadComponent MetalToolchain
+
+      - name: Build unsigned iPhone app
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          xcodebuild \
+            -project Reeve.xcodeproj \
+            -scheme Reeve \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/ReeveBuild" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee "$RUNNER_TEMP/build.log"
+
+      - name: Package IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          APP="$RUNNER_TEMP/ReeveBuild/Build/Products/Release-iphoneos/Reeve.app"
+
+          if [ ! -d "$APP" ]; then
+            echo "Reeve.app was not found in the expected location."
+            find "$RUNNER_TEMP/ReeveBuild/Build/Products" \
+              -maxdepth 3 -name '*.app' -print
+            exit 1
+          fi
+
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          ditto "$APP" "$RUNNER_TEMP/ipa/Payload/Reeve.app"
+
+          cd "$RUNNER_TEMP/ipa"
+          /usr/bin/zip -qry Reeve-unsigned.ipa Payload
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Reeve-unsigned-IPA
+          path: ${{ runner.temp }}/ipa/Reeve-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Reeve-build-log
+          path: ${{ runner.temp }}/build.log
+          if-no-files-found: ignore
+          retention-days: 7
