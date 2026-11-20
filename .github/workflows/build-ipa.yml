@@ -30,7 +30,6 @@ jobs:
             -project Reeve.xcodeproj \
             -scheme Reeve \
             -configuration Release \
-            -sdk iphoneos \
             -destination 'generic/platform=iOS' \
             -derivedDataPath "$RUNNER_TEMP/ReeveBuild" \
             CODE_SIGNING_ALLOWED=NO \
